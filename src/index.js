@@ -19,16 +19,12 @@ class KeyvRedis extends EventEmitter {
 
 		const client = redis.createClient(opts);
 
-		this.redis = ['get', 'set', 'sadd', 'del', 'srem', 'smembers'].reduce((obj, method) => {
+		this.redis = ['get', 'set', 'del', 'keys'].reduce((obj, method) => {
 			obj[method] = pify(client[method].bind(client));
 			return obj;
 		}, {});
 
 		client.on('error', err => this.emit('error', err));
-	}
-
-	_getNamespace() {
-		return `namespace:${this.namespace}`;
 	}
 
 	get(key) {
@@ -51,21 +47,20 @@ class KeyvRedis extends EventEmitter {
 					return this.redis.set(key, value, 'PX', ttl);
 				}
 				return this.redis.set(key, value);
-			})
-			.then(() => this.redis.sadd(this._getNamespace(), key));
-	}
-
-	delete(key) {
-		return this.redis.del(key)
-			.then(items => {
-				return this.redis.srem(this._getNamespace(), key)
-					.then(() => items > 0);
 			});
 	}
 
+	delete(key) {
+		return this.redis.del(key).then(items => items > 0);
+	}
+
 	clear() {
-		return this.redis.smembers(this._getNamespace())
-			.then(keys => this.redis.del.apply(null, keys.concat(this._getNamespace())))
+		return this.redis.keys(`${this.namespace}:*`)
+			.then(keys => {
+				if (keys.length > 0) {
+					this.redis.del(keys);
+				}
+			})
 			.then(() => undefined);
 	}
 }
